@@ -79,7 +79,18 @@ func (p *Person) Table() string {
 func (p *Person) Columns() []string {
 	return []string{"id", "name", "created_at"}
 }
-
+func (p *Person) PrimaryKeys() []string {
+	return []string{"id"}
+}
+func (p *Person) PrimaryValues() []interface{} {
+	return []interface{}{p.ID}
+}
+func (p *Person) ValueColumns() []string {
+	return []string{"name", "created_at"}
+}
+func (p *Person) Values() []interface{} {
+	return []interface{}{p.Name, p.CreatedAt}
+}
 func (p *Person) Scan(r RowScanner) error {
 	var id int64
 	var name string
@@ -201,5 +212,84 @@ func TestSelectRow(t *testing.T) {
 	tm, _ := time.Parse("2006-01-02 15:04:05", "2018-04-06 01:23:45")
 	if person.CreatedAt != tm {
 		t.Errorf("CreatedAt is not correct, actual=%s", person.CreatedAt)
+	}
+}
+
+func TestInsertDelete(t *testing.T) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Errorf("failed to checkout connection: %s", err.Error())
+	}
+
+	name := "Emet-Selch"
+	tm, _ := time.Parse("2006-01-02 15:04:05", "2020-07-07 13:45:00")
+	person := &Person{
+		Name:      name,
+		CreatedAt: tm,
+	}
+	id, err := Insert(ctx, conn, person)
+	if err != nil {
+		t.Errorf("failed to insert Emet-Selch: %s", err.Error())
+	}
+	if id != 6 {
+		t.Errorf("unexpected LastInsertID, actual=%d", id)
+	}
+
+	newPerson := &Person{}
+	err = SelectRow(ctx, conn, newPerson, `WHERE name = ?`, name)
+	if err != nil {
+		t.Errorf("failed to fetch newPerson: %s", err)
+	}
+	if newPerson.ID != 6 {
+		t.Errorf("unexpected ID, actual=%d", newPerson.ID)
+	}
+
+	err = Delete(ctx, conn, newPerson)
+	if err != nil {
+		t.Errorf("failed to delete newPerson: %s", err)
+	}
+
+	err = SelectRow(ctx, conn, newPerson, `WHERE name = ?`, name)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			t.Errorf("unexpected error on SelectRow: %s", err)
+		}
+	} else {
+		t.Errorf("succeeded to fetch for unknown reason, v=%v", newPerson)
+	}
+
+}
+
+func TestUpdate(t *testing.T) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Errorf("failed to checkout connection: %s", err.Error())
+	}
+
+	person := &Person{}
+	err = SelectRow(ctx, conn, person, `WHERE name = ?`, "Lamimi")
+	if err != nil {
+		t.Errorf("failed to fetch Lamimi: %s", err)
+	}
+
+	tm, _ := time.Parse("2006-01-02 15:04:05", "2020-07-07 14:25:00")
+	person.CreatedAt = tm
+	err = Update(ctx, conn, person)
+	if err != nil {
+		t.Errorf("failed to update Lamimi: %s", err.Error())
+	}
+
+	updatedPerson := &Person{}
+	err = SelectRow(ctx, conn, updatedPerson, `WHERE name = ?`, "Lamimi")
+	if err != nil {
+		t.Errorf("failed to fetch Lamimi again: %s", err)
+	}
+	if updatedPerson.CreatedAt.Unix() != person.CreatedAt.Unix() {
+		t.Errorf("unexpected created_at, actual=%v", updatedPerson.CreatedAt)
+	}
+	if updatedPerson.CreatedAt.Unix() != tm.Unix() {
+		t.Errorf("unexpected created_at, actual=%v", updatedPerson.CreatedAt)
 	}
 }

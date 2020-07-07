@@ -132,9 +132,9 @@ func SelectRow(ctx Context, s Selectable, out interface{}, fragment string, args
 		return fmt.Errorf("invalid output container: %s", err.Error())
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s", strings.Join(columns, ", "), table, fragment)
-	q, exargs := expandPlaceholder(query, args...)
-	row := s.QueryRowContext(ctx, q, exargs...)
+	q := fmt.Sprintf("SELECT %s FROM %s %s", strings.Join(columns, ", "), table, fragment)
+	query, exargs := expandPlaceholder(q, args...)
+	row := s.QueryRowContext(ctx, query, exargs...)
 	mappable := reflect.ValueOf(out).Interface().(Mappable)
 	err = mappable.Scan(row)
 	if err != nil {
@@ -159,6 +159,14 @@ type Mappable interface {
 	Scan(r RowScanner) error
 }
 
+type Modifiable interface {
+	Table() string
+	PrimaryKeys() []string
+	PrimaryValues() []interface{}
+	ValueColumns() []string
+	Values() []interface{}
+}
+
 func if2select(mappableTp reflect.Type) ([]string, string, error) {
 	vp := reflect.Zero(mappableTp)
 	tableMethod := vp.MethodByName("Table")
@@ -170,4 +178,80 @@ func if2select(mappableTp reflect.Type) ([]string, string, error) {
 	cols := columnsValue[0].Interface()
 
 	return cols.([]string), tableValue[0].String(), nil
+}
+
+type Executable interface {
+	ExecContext(ctx Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+func Insert(ctx Context, e Executable, in Modifiable) (int64, error) {
+	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (?)`, in.Table(), strings.Join(in.ValueColumns(), ","))
+	args := in.Values()
+	query, exargs := expandPlaceholder(q, args)
+	//log.Println(query, exargs)
+
+	result, err := e.ExecContext(ctx, query, exargs...)
+	if err != nil {
+		log.Printf("failed to insert %s err=%s\n", in.Table(), err)
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		log.Printf("failed to get LastInsertId %s err=%s\n", in.Table(), err)
+		return 0, err
+	}
+	return id, err
+}
+
+// TODO
+// func BulkInsert(ctx Context, e Executable, in []Modifiable) (int64, error) {
+// }
+
+func Update(ctx Context, e Executable, in Modifiable) error {
+	pkey := in.PrimaryKeys()
+	kv := []string{}
+	for _, v := range pkey {
+		kv = append(kv, fmt.Sprintf("%s = ?", v))
+	}
+	cond := strings.Join(kv, " AND ")
+
+	cols := in.ValueColumns()
+	kv = make([]string, 0)
+	for _, v := range cols {
+		kv = append(kv, fmt.Sprintf("%s = ?", v))
+	}
+	set := strings.Join(kv, ", ")
+
+	q := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`, in.Table(), set, cond)
+	args := in.Values()
+	args = append(args, in.PrimaryValues()...)
+	//log.Println(q, args)
+
+	_, err := e.ExecContext(ctx, q, args...)
+	if err != nil {
+		log.Printf("failed to update %s err=%s\n", in.Table(), err)
+		return err
+	}
+	return nil
+}
+
+func Delete(ctx Context, e Executable, in Modifiable) error {
+	pkey := in.PrimaryKeys()
+	kv := []string{}
+	for _, v := range pkey {
+		kv = append(kv, fmt.Sprintf("%s = ?", v))
+	}
+	cond := strings.Join(kv, " AND ")
+
+	q := fmt.Sprintf(`DELETE FROM %s WHERE %s`, in.Table(), cond)
+	args := in.PrimaryValues()
+	//log.Println(q, args)
+
+	_, err := e.ExecContext(ctx, q, args...)
+	if err != nil {
+		log.Printf("failed to delete %s err=%s\n", in.Table(), err)
+		return err
+	}
+	return nil
 }
