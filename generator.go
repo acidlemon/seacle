@@ -26,7 +26,7 @@ type Generator struct {
 func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
 	// at first, find column from tag
 	structTag := field.Tag
-	tag := structTag.Get(g.Tag)
+	tag, _ := structTag.Lookup(g.Tag)
 
 	// if tag is empty, use snake case of Name
 	if tag == "" {
@@ -85,6 +85,7 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	// if there's no primary, firstCol is primary
 	if len(primary) == 0 {
 		if len(values) != 0 {
+			log.Println("There's no primary columns. use first column as primary column:", values[0].Field)
 			primary = append(primary, values[0])
 			values = values[1:]
 		}
@@ -99,8 +100,6 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 		"Values":     values,
 		"AllColumns": append(primary, values...),
 	}
-
-	log.Println(vars)
 
 	return vars, nil
 }

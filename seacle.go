@@ -188,7 +188,6 @@ func Insert(ctx Context, e Executable, in Modifiable) (int64, error) {
 	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (?)`, in.Table(), strings.Join(in.ValueColumns(), ","))
 	args := in.Values()
 	query, exargs := expandPlaceholder(q, args)
-	//log.Println(query, exargs)
 
 	result, err := e.ExecContext(ctx, query, exargs...)
 	if err != nil {
@@ -226,7 +225,6 @@ func Update(ctx Context, e Executable, in Modifiable) error {
 	q := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`, in.Table(), set, cond)
 	args := in.Values()
 	args = append(args, in.PrimaryValues()...)
-	//log.Println(q, args)
 
 	_, err := e.ExecContext(ctx, q, args...)
 	if err != nil {
@@ -246,7 +244,6 @@ func Delete(ctx Context, e Executable, in Modifiable) error {
 
 	q := fmt.Sprintf(`DELETE FROM %s WHERE %s`, in.Table(), cond)
 	args := in.PrimaryValues()
-	//log.Println(q, args)
 
 	_, err := e.ExecContext(ctx, q, args...)
 	if err != nil {
