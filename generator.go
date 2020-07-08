@@ -46,13 +46,11 @@ func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
 }
 
 func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]interface{}, error) {
-	if !tp.Implements(mappableIf) {
-		ptrTp := reflect.PtrTo(tp)
-		if !ptrTp.Implements(mappableIf) {
-			return nil, fmt.Errorf("Type %s does not implement Mappable", tp.String())
-		}
-	} else {
-		tp = tp.Elem()
+	if tp.Kind() == reflect.Ptr {
+		tp = reflect.PtrTo(tp)
+	}
+	if tp.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("unexpected Type: %s", tp.String())
 	}
 	// note: Now, tp is not pointer type but struct type
 
