@@ -13,6 +13,8 @@ import (
 
 type Context = context.Context
 
+var mappableIf = reflect.TypeOf((*Mappable)(nil)).Elem()
+
 func expandPlaceholder(q string, args ...interface{}) (string, []interface{}) {
 	if len(args) == 0 {
 		return q, args
@@ -65,10 +67,9 @@ func Select(ctx Context, s Selectable, out interface{}, fragment string, args ..
 		}
 
 		checkTp = checkTp.Elem()
-		it := reflect.TypeOf((*Mappable)(nil)).Elem()
-		if !checkTp.Implements(it) {
+		if !checkTp.Implements(mappableIf) {
 			ptrTp := reflect.PtrTo(checkTp)
-			if ptrTp.Implements(it) {
+			if ptrTp.Implements(mappableIf) {
 				tp = ptrTp
 				isVal = true
 			} else {
@@ -122,8 +123,7 @@ func Select(ctx Context, s Selectable, out interface{}, fragment string, args ..
 func SelectRow(ctx Context, s Selectable, out interface{}, fragment string, args ...interface{}) error {
 	// check about "out"
 	tp := reflect.TypeOf(out)
-	it := reflect.TypeOf((*Mappable)(nil)).Elem()
-	if !tp.Implements(it) {
+	if !tp.Implements(mappableIf) {
 		return fmt.Errorf("out is not Mappable: %s", tp.String())
 	}
 
@@ -159,14 +159,6 @@ type Mappable interface {
 	Scan(r RowScanner) error
 }
 
-type Modifiable interface {
-	Table() string
-	PrimaryKeys() []string
-	PrimaryValues() []interface{}
-	ValueColumns() []string
-	Values() []interface{}
-}
-
 func if2select(mappableTp reflect.Type) ([]string, string, error) {
 	vp := reflect.Zero(mappableTp)
 	tableMethod := vp.MethodByName("Table")
@@ -182,6 +174,14 @@ func if2select(mappableTp reflect.Type) ([]string, string, error) {
 
 type Executable interface {
 	ExecContext(ctx Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+type Modifiable interface {
+	Table() string
+	PrimaryKeys() []string
+	PrimaryValues() []interface{}
+	ValueColumns() []string
+	Values() []interface{}
 }
 
 func Insert(ctx Context, e Executable, in Modifiable) (int64, error) {
