@@ -59,8 +59,9 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	}
 	// note: Now, tp is not pointer type but struct type
 
-	rep := strings.NewReplacer("a", "", "i", "", "u", "", "e", "", "o", "")
-	shortTable := rep.Replace(table)
+	//rep := strings.NewReplacer("a", "", "i", "", "u", "", "e", "", "o", "")
+	//shortTable := rep.Replace(table)
+	shortTable := table
 
 	primary := []columnInfo{}
 	values := []columnInfo{}
