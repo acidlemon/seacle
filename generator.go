@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 
 	"golang.org/x/tools/imports"
+	"github.com/serenize/snaker"
 )
 
 type columnInfo struct {
@@ -18,7 +19,31 @@ type columnInfo struct {
 	Type string
 }
 
-type Generator struct{}
+type Generator struct{
+	Tag string
+}
+
+func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
+	// at first, find column from tag
+	structTag := field.Tag
+	tag := structTag.Get(g.Tag)
+
+	// if tag is empty, use snake case of Name
+	if tag == "" {
+		tag = snaker.CamelToSnake(field.Name)
+	}
+
+	// check primary flag ( `db:"id,primary"` means primary column )
+	ss := strings.Split(tag, ",")
+	isPrimary := false
+	if len(ss) == 2 {
+		if ss[1] == "primary" {
+			isPrimary = true
+		}
+	}
+
+	return ss[0], isPrimary
+}
 
 func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]interface{}, error) {
 	if !tp.Implements(mappableIf) {
@@ -34,12 +59,39 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	rep := strings.NewReplacer("a", "", "i", "", "u", "", "e", "", "o", "")
 	shortTable := rep.Replace(table)
 
-	primary := []columnInfo{
-		{Field: "ID", Column: "id", Type: "int64"},
+	primary := []columnInfo{}
+	values := []columnInfo{}
+
+	// Field analysis
+	for i := 0; i < tp.NumField(); i++ {
+		field := tp.Field(i)
+		if field.PkgPath != "" {
+			// this is unexported field
+			continue
+		}
+
+		column, isPrimary := g.analyzeColumn(field)
+		colinfo := columnInfo{
+			Field: field.Name,
+			Column: column,
+			Type: field.Type.Name(),
+		}
+
+		if isPrimary {
+			primary = append(primary, colinfo)
+		} else {
+			values = append(values, colinfo)
+		}
+
+		log.Println(colinfo)
 	}
-	values := []columnInfo{
-		{Field: "Name", Column: "name", Type: "string"},
-		{Field: "CreatedAt", Column: "created_at", Type: "time.Time"},
+
+	// if there's no primary, firstCol is primary
+	if len(primary) == 0 {
+		if len(values) != 0 {
+			primary = append(primary, values[0])
+			values = values[1:]
+		}
 	}
 
 	vars := map[string]interface{}{
@@ -51,6 +103,8 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 		"Values":     values,
 		"AllColumns": append(primary, values...),
 	}
+
+	log.Println(vars)
 
 	return vars, nil
 }
