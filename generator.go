@@ -3,23 +3,23 @@ package seacle
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"reflect"
-	"text/template"
 	"strings"
-	"io/ioutil"
+	"text/template"
 
-	"golang.org/x/tools/imports"
 	"github.com/serenize/snaker"
+	"golang.org/x/tools/imports"
 )
 
 type columnInfo struct {
-	Field string
+	Field  string
 	Column string
-	Type string
+	Type   string
 }
 
-type Generator struct{
+type Generator struct {
 	Tag string
 }
 
@@ -70,9 +70,9 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 
 		column, isPrimary := g.analyzeColumn(field)
 		colinfo := columnInfo{
-			Field: field.Name,
+			Field:  field.Name,
 			Column: column,
-			Type: field.Type.Name(),
+			Type:   field.Type.String(),
 		}
 
 		if isPrimary {
@@ -80,8 +80,6 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 		} else {
 			values = append(values, colinfo)
 		}
-
-		log.Println(colinfo)
 	}
 
 	// if there's no primary, firstCol is primary

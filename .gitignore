@@ -1,3 +1,2 @@
 go.sum
-test/person.gen.go
-
+test/test_person.gen.go
