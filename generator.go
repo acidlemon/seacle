@@ -42,6 +42,11 @@ func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
 		}
 	}
 
+	if ss[0] == "-" {
+		// skip tag
+		return "", false
+	}
+
 	return ss[0], isPrimary
 }
 
@@ -69,6 +74,9 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 		}
 
 		column, isPrimary := g.analyzeColumn(field)
+		if column == "" {
+			continue
+		}
 		colinfo := columnInfo{
 			Field:  field.Name,
 			Column: column,
