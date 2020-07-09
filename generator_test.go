@@ -19,4 +19,9 @@ func TestGenerator(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
+
+	err = gen.Generate(reflect.TypeOf(TestPerson3{}), "seacle", "person", "test/test_person3.gen.go")
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
 }

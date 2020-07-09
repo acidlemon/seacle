@@ -50,6 +50,52 @@ func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
 	return ss[0], isPrimary
 }
 
+func (g Generator) analyzeStruct(tp reflect.Type) (primary []columnInfo, values []columnInfo) {
+	for i := 0; i < tp.NumField(); i++ {
+		f := tp.Field(i)
+		p, v := g.analyzeField(f)
+
+		primary = append(primary, p...)
+		values = append(values, v...)
+	}
+	return
+}
+
+func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo, values []columnInfo) {
+	tp := field.Type
+	tag, ok := field.Tag.Lookup(g.Tag)
+	if !ok || tag == "-" {
+		if tp.Kind() == reflect.Ptr {
+			tp = tp.Elem()
+		}
+		if tp.Kind() == reflect.Struct {
+			// recursive!
+			p, v := g.analyzeStruct(tp)
+			primary = append(primary, p...)
+			values = append(values, v...)
+			return
+		}
+	}
+
+	column, isPrimary := g.analyzeColumn(field)
+	if column == "" {
+		return
+	}
+	colinfo := columnInfo{
+		Field:  field.Name,
+		Column: column,
+		Type:   field.Type.String(),
+	}
+
+	if isPrimary {
+		primary = append(primary, colinfo)
+	} else {
+		values = append(values, colinfo)
+	}
+
+	return
+}
+
 func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]interface{}, error) {
 	if tp.Kind() == reflect.Ptr {
 		tp = reflect.PtrTo(tp)
@@ -63,33 +109,8 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	//shortTable := rep.Replace(table)
 	shortTable := table
 
-	primary := []columnInfo{}
-	values := []columnInfo{}
-
 	// Field analysis
-	for i := 0; i < tp.NumField(); i++ {
-		field := tp.Field(i)
-		if field.PkgPath != "" {
-			// this is unexported field
-			continue
-		}
-
-		column, isPrimary := g.analyzeColumn(field)
-		if column == "" {
-			continue
-		}
-		colinfo := columnInfo{
-			Field:  field.Name,
-			Column: column,
-			Type:   field.Type.String(),
-		}
-
-		if isPrimary {
-			primary = append(primary, colinfo)
-		} else {
-			values = append(values, colinfo)
-		}
-	}
+	primary, values := g.analyzeStruct(tp)
 
 	// if there's no primary, firstCol is primary
 	if len(primary) == 0 {
