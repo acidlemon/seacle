@@ -64,7 +64,10 @@ func (g Generator) analyzeStruct(tp reflect.Type) (primary []columnInfo, values 
 func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo, values []columnInfo) {
 	tp := field.Type
 	tag, ok := field.Tag.Lookup(g.Tag)
-	if !ok || tag == "-" {
+	if tag == "-" {
+		return
+	}
+	if !ok {
 		if tp.Kind() == reflect.Ptr {
 			tp = tp.Elem()
 		}
