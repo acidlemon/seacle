@@ -104,7 +104,16 @@ func TestSelect(t *testing.T) {
 	// fail (invalid type)
 	people = make([]*Person, 0)
 	err = Select(ctx, conn, people, `WHERE name = ?`, "Lamimi")
-	if err.Error() != "out is not pointer: []*seacle.Person" {
+	if err.Error() != "Select: out is not pointer: []*seacle.Person" {
+		log.Println(err)
+		t.Errorf("unexpect error: %s", err)
+	}
+
+	// fail (invalid query)
+	people = make([]*Person, 0)
+	err = Select(ctx, conn, &people, `WHERE naname = ?`, "Lamimi")
+	if err.Error() != `Select: QueryContext returned error: err="no such column: naname", query="SELECT id, name, created_at FROM person WHERE naname = ?", args=["Lamimi"]` {
+		log.Println(err)
 		t.Errorf("unexpect error: %s", err)
 	}
 

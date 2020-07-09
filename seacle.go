@@ -3,9 +3,7 @@ package seacle
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -23,7 +21,7 @@ func expandPlaceholder(q string, args ...interface{}) (string, []interface{}) {
 	re := regexp.MustCompile("\\?")
 	exargs := []interface{}{}
 	count := 0
-	q = re.ReplaceAllStringFunc(q, func(match string) string {
+	query := re.ReplaceAllStringFunc(q, func(match string) string {
 		if count >= len(args) {
 			return match // do nothing
 		}
@@ -42,7 +40,7 @@ func expandPlaceholder(q string, args ...interface{}) (string, []interface{}) {
 		}
 	})
 
-	return q, exargs
+	return query, exargs
 }
 
 type Selectable interface {
@@ -58,12 +56,12 @@ func Select(ctx Context, s Selectable, out interface{}, fragment string, args ..
 		checkTp := reflect.TypeOf(out)
 		typeName := checkTp.String()
 		if checkTp.Kind() != reflect.Ptr {
-			return fmt.Errorf("out is not pointer: %s", typeName)
+			return fmt.Errorf("Select: out is not pointer: %s", typeName)
 		}
 
 		checkTp = checkTp.Elem()
 		if checkTp.Kind() != reflect.Slice {
-			return fmt.Errorf("out is not pointer of slice: %s", typeName)
+			return fmt.Errorf("Select: out is not pointer of slice: %s", typeName)
 		}
 
 		checkTp = checkTp.Elem()
@@ -73,7 +71,7 @@ func Select(ctx Context, s Selectable, out interface{}, fragment string, args ..
 				tp = ptrTp
 				isVal = true
 			} else {
-				return fmt.Errorf("out is not pointer of slice of Mappable: %s", typeName)
+				return fmt.Errorf("Select: out is not pointer of slice of Mappable: %s", typeName)
 			}
 		} else {
 			tp = checkTp
@@ -82,19 +80,17 @@ func Select(ctx Context, s Selectable, out interface{}, fragment string, args ..
 
 	columns, table, err := if2select(tp)
 	if err != nil {
-		return fmt.Errorf("invalid output container: %s", err.Error())
+		return fmt.Errorf("Select: Invalid output container: %s", err.Error())
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s", strings.Join(columns, ", "), table, fragment)
-	q, exargs := expandPlaceholder(query, args...)
-	rows, err := s.QueryContext(ctx, q, exargs...)
+	q := fmt.Sprintf("SELECT %s FROM %s %s", strings.Join(columns, ", "), table, fragment)
+	query, exargs := expandPlaceholder(q, args...)
+	rows, err := s.QueryContext(ctx, query, exargs...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return err
 		}
-		msg := fmt.Sprintf("Select: QueryContext returned error: %s", err)
-		log.Println(msg)
-		return errors.New(msg)
+		return formatError("Select: QueryContext returned error", query, exargs, err)
 	}
 	defer rows.Close()
 
@@ -124,12 +120,12 @@ func SelectRow(ctx Context, s Selectable, out interface{}, fragment string, args
 	// check about "out"
 	tp := reflect.TypeOf(out)
 	if !tp.Implements(mappableIf) {
-		return fmt.Errorf("out is not Mappable: %s", tp.String())
+		return fmt.Errorf("SelectRow: out is not Mappable: %s", tp.String())
 	}
 
 	columns, table, err := if2select(tp)
 	if err != nil {
-		return fmt.Errorf("invalid output container: %s", err.Error())
+		return fmt.Errorf("SelectRow: Invalid output container: %s", err.Error())
 	}
 
 	q := fmt.Sprintf("SELECT %s FROM %s %s", strings.Join(columns, ", "), table, fragment)
@@ -141,9 +137,7 @@ func SelectRow(ctx Context, s Selectable, out interface{}, fragment string, args
 		if err == sql.ErrNoRows {
 			return err
 		}
-		msg := fmt.Sprintf("Select: QueryContext returned error: %s", err)
-		log.Println(msg)
-		return errors.New(msg)
+		return formatError("SelectRow: QueryRowContext returned error", q, exargs, err)
 	}
 
 	return nil
@@ -191,14 +185,12 @@ func Insert(ctx Context, e Executable, in Modifiable) (int64, error) {
 
 	result, err := e.ExecContext(ctx, query, exargs...)
 	if err != nil {
-		log.Printf("failed to insert %s err=%s\n", in.Table(), err)
-		return 0, err
+		return 0, formatError("Insert: ExecContext returned error", query, exargs, err)
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		log.Printf("failed to get LastInsertId %s err=%s\n", in.Table(), err)
-		return 0, err
+		return 0, formatError("Insert: Failed to get LastInsertId", query, exargs, err)
 	}
 	return id, err
 }
@@ -222,14 +214,13 @@ func Update(ctx Context, e Executable, in Modifiable) error {
 	}
 	set := strings.Join(kv, ", ")
 
-	q := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`, in.Table(), set, cond)
-	args := in.Values()
-	args = append(args, in.PrimaryValues()...)
+	query := fmt.Sprintf(`UPDATE %s SET %s WHERE %s`, in.Table(), set, cond)
+	exargs := in.Values()
+	exargs = append(exargs, in.PrimaryValues()...)
 
-	_, err := e.ExecContext(ctx, q, args...)
+	_, err := e.ExecContext(ctx, query, exargs...)
 	if err != nil {
-		log.Printf("failed to update %s err=%s\n", in.Table(), err)
-		return err
+		return formatError("Update: ExecContext returned error", query, exargs, err)
 	}
 	return nil
 }
@@ -242,13 +233,22 @@ func Delete(ctx Context, e Executable, in Modifiable) error {
 	}
 	cond := strings.Join(kv, " AND ")
 
-	q := fmt.Sprintf(`DELETE FROM %s WHERE %s`, in.Table(), cond)
-	args := in.PrimaryValues()
+	query := fmt.Sprintf(`DELETE FROM %s WHERE %s`, in.Table(), cond)
+	exargs := in.PrimaryValues()
 
-	_, err := e.ExecContext(ctx, q, args...)
+	_, err := e.ExecContext(ctx, query, exargs...)
 	if err != nil {
-		log.Printf("failed to delete %s err=%s\n", in.Table(), err)
-		return err
+		return formatError("Delete: ExecContext returned error", query, exargs, err)
 	}
 	return nil
+}
+
+func formatError(message, query string, args []interface{}, err error) error {
+	argsstr := make([]string, 0, len(args))
+	for _, v := range args {
+		argsstr = append(argsstr, fmt.Sprintf(`"%s"`, v))
+	}
+
+	return fmt.Errorf(`%s: err="%s", query="%s", args=%s`,
+		message, err, query, "["+strings.Join(argsstr, ", ")+"]")
 }
