@@ -208,7 +208,7 @@ func (p *{{ .Typename }}) Values() []interface{} {
 func (p *{{ .Typename }}) Scan(r seacle.RowScanner) error {
 	{{ range $i, $v := .AllColumns }}var arg{{ $i }} {{ $v.Type }}
 	{{ end }}
-	err := r.Scan({{ range $i, $v := .Values }}&arg{{ $i }}, {{ end }})
+	err := r.Scan({{ range $i, $v := .AllColumns }}&arg{{ $i }}, {{ end }})
 	if err == sql.ErrNoRows {
 		return err
 	} else if err != nil {
