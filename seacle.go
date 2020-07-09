@@ -246,7 +246,7 @@ func Delete(ctx Context, e Executable, in Modifiable) error {
 func formatError(message, query string, args []interface{}, err error) error {
 	argsstr := make([]string, 0, len(args))
 	for _, v := range args {
-		argsstr = append(argsstr, fmt.Sprintf(`"%s"`, v))
+		argsstr = append(argsstr, fmt.Sprintf(`"%v"`, v))
 	}
 
 	return fmt.Errorf(`%s: err="%s", query="%s", args=%s`,
