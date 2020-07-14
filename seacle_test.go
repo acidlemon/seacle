@@ -53,6 +53,15 @@ func setup() *sql.DB {
 		panic(fmt.Sprintf(`failed to insert data: %s`, err))
 	}
 
+	// gen := Generator{
+	// 	Tag: "db",
+	// }
+
+	// err = gen.Generate(reflect.TypeOf(Person{}), "seacle", "person", "person_gen_test.go")
+	// if err != nil {
+	// 	panic("unexpected error: " + err.Error())
+	// }
+
 	return db
 }
 
@@ -112,8 +121,7 @@ func TestSelect(t *testing.T) {
 	// fail (invalid query)
 	people = make([]*Person, 0)
 	err = Select(ctx, conn, &people, `WHERE naname = ?`, "Lamimi")
-	if err.Error() != `Select: QueryContext returned error: err="no such column: naname", query="SELECT id, name, created_at FROM person WHERE naname = ?", args=["Lamimi"]` {
-		log.Println(err)
+	if err.Error() != `Select: QueryContext returned error: err="no such column: naname", query="SELECT person.id, person.name, person.created_at FROM person WHERE naname = ?", args=["Lamimi"]` {
 		t.Errorf("unexpect error: %s", err)
 	}
 

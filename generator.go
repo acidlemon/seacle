@@ -110,7 +110,7 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 
 	//rep := strings.NewReplacer("a", "", "i", "", "u", "", "e", "", "o", "")
 	//shortTable := rep.Replace(table)
-	shortTable := table
+	//shortTable := table
 
 	// Field analysis
 	primary, values := g.analyzeStruct(tp)
@@ -125,10 +125,10 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	}
 
 	vars := map[string]interface{}{
-		"Package":    pkg,
-		"Table":      table,
-		"Typename":   tp.Name(),
-		"TableAlias": shortTable,
+		"Package":  pkg,
+		"Table":    table,
+		"Typename": tp.Name(),
+		//"TableAlias": shortTable,
 		"Primary":    primary,
 		"Values":     values,
 		"AllColumns": append(primary, values...),
@@ -182,15 +182,15 @@ import (
 var _ seacle.Mappable = (*{{ .Typename }})(nil)
 
 func (p *{{ .Typename }}) Table() string {
-	return "{{ .Table }} AS {{ .TableAlias }}"
+	return "{{ .Table }}"
 }
 
 func (p *{{ .Typename }}) Columns() []string {
-	return []string{ {{ range $i, $v := .AllColumns }}"{{ $.TableAlias }}.{{ $v.Column }}", {{ end }} }
+	return []string{ {{ range $i, $v := .AllColumns }}"{{ $.Table }}.{{ $v.Column }}", {{ end }} }
 }
 
 func (p *{{ .Typename }}) PrimaryKeys() []string {
-	return []string{ {{ range $i, $v := .Primary }}"{{ $.TableAlias }}.{{ $v.Column }}", {{ end }} }
+	return []string{ {{ range $i, $v := .Primary }}"{{ $v.Column }}", {{ end }} }
 }
 
 func (p *{{ .Typename }}) PrimaryValues() []interface{} {
@@ -198,7 +198,7 @@ func (p *{{ .Typename }}) PrimaryValues() []interface{} {
 }
 
 func (p *{{ .Typename }}) ValueColumns() []string {
-	return []string{ {{ range $i, $v := .Values }}"{{ $.TableAlias }}.{{ $v.Column }}", {{ end }} }
+	return []string{ {{ range $i, $v := .Values }}"{{ $v.Column }}", {{ end }} }
 }
 
 func (p *{{ .Typename }}) Values() []interface{} {
