@@ -108,10 +108,6 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	}
 	// note: Now, tp is not pointer type but struct type
 
-	//rep := strings.NewReplacer("a", "", "i", "", "u", "", "e", "", "o", "")
-	//shortTable := rep.Replace(table)
-	//shortTable := table
-
 	// Field analysis
 	primary, values := g.analyzeStruct(tp)
 
@@ -125,10 +121,9 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	}
 
 	vars := map[string]interface{}{
-		"Package":  pkg,
-		"Table":    table,
-		"Typename": tp.Name(),
-		//"TableAlias": shortTable,
+		"Package":    pkg,
+		"Table":      table,
+		"Typename":   tp.Name(),
 		"Primary":    primary,
 		"Values":     values,
 		"AllColumns": append(primary, values...),
