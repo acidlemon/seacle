@@ -167,6 +167,7 @@ func if2select(mappableTp reflect.Type) ([]string, string, error) {
 }
 
 type Executable interface {
+	Selectable
 	ExecContext(ctx Context, query string, args ...interface{}) (sql.Result, error)
 }
 
