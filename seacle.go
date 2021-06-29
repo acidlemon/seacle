@@ -48,6 +48,15 @@ type Selectable interface {
 	QueryRowContext(ctx Context, query string, args ...interface{}) *sql.Row
 }
 
+func QueryContext(ctx Context, s Selectable, query string, args ...interface{}) (*sql.Rows, error) {
+	query, exargs := expandPlaceholder(query, args...)
+	return s.QueryContext(ctx, query, exargs...)
+}
+func QueryRowContext(ctx Context, s Selectable, query string, args ...interface{}) *sql.Row {
+	query, exargs := expandPlaceholder(query, args...)
+	return s.QueryRowContext(ctx, query, exargs...)
+}
+
 func Select(ctx Context, s Selectable, out interface{}, fragment string, args ...interface{}) error {
 	// check about "out"
 	var tp reflect.Type
