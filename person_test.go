@@ -6,7 +6,7 @@ import (
 )
 
 type Person struct {
-	ID        int64     `db:"id,primary"`
+	ID        int64     `db:"id,primary,auto_increment"`
 	Name      string    `db:"name"`
 	CreatedAt time.Time `db:"created_at"`
 }
@@ -33,6 +33,10 @@ func (p *Person) ValueColumns() []string {
 
 func (p *Person) Values() []interface{} {
 	return []interface{}{p.Name, p.CreatedAt}
+}
+
+func (p *Person) AutoIncrementColumn() string {
+	return "id"
 }
 
 func (p *Person) Scan(r RowScanner) error {

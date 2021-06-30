@@ -23,7 +23,7 @@ type Generator struct {
 	Tag string
 }
 
-func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
+func (g Generator) analyzeColumn(field reflect.StructField) (string, bool, bool) {
 	// at first, find column from tag
 	structTag := field.Tag
 	tag, _ := structTag.Lookup(g.Tag)
@@ -33,35 +33,44 @@ func (g Generator) analyzeColumn(field reflect.StructField) (string, bool) {
 		tag = snaker.CamelToSnake(field.Name)
 	}
 
-	// check primary flag ( `db:"id,primary"` means primary column )
+	// check flags ( `db:"id,primary"` means primary column, `db:"id,auto_increment" means auto increment column` )
 	ss := strings.Split(tag, ",")
 	isPrimary := false
-	if len(ss) == 2 {
-		if ss[1] == "primary" {
-			isPrimary = true
+	isAutoIncrement := false
+	if len(ss) > 1 {
+		for _, v := range ss[1:] {
+			if v == "primary" {
+				isPrimary = true
+			}
+			if v == "auto_increment" {
+				isAutoIncrement = true
+			}
 		}
 	}
 
 	if ss[0] == "-" {
 		// skip tag
-		return "", false
+		return "", false, false
 	}
 
-	return ss[0], isPrimary
+	return ss[0], isPrimary, isAutoIncrement
 }
 
-func (g Generator) analyzeStruct(tp reflect.Type) (primary []columnInfo, values []columnInfo) {
+func (g Generator) analyzeStruct(tp reflect.Type) (primary []columnInfo, values []columnInfo, autoIncrementCol string) {
 	for i := 0; i < tp.NumField(); i++ {
 		f := tp.Field(i)
-		p, v := g.analyzeField(f)
+		p, v, auto := g.analyzeField(f)
 
 		primary = append(primary, p...)
 		values = append(values, v...)
+		if autoIncrementCol == "" && auto != "" {
+			autoIncrementCol = auto
+		}
 	}
 	return
 }
 
-func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo, values []columnInfo) {
+func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo, values []columnInfo, autoIncrementCol string) {
 	tp := field.Type
 	tag, ok := field.Tag.Lookup(g.Tag)
 	if tag == "-" {
@@ -73,14 +82,18 @@ func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo
 		}
 		if tp.Kind() == reflect.Struct {
 			// recursive!
-			p, v := g.analyzeStruct(tp)
+			p, v, auto := g.analyzeStruct(tp)
 			primary = append(primary, p...)
 			values = append(values, v...)
+			if autoIncrementCol == "" && auto != "" {
+				autoIncrementCol = auto
+			}
 			return
 		}
 	}
 
-	column, isPrimary := g.analyzeColumn(field)
+	column, isPrimary, isAutoIncrement := g.analyzeColumn(field)
+	//log.Println("column=", column, "isPrimary=", isPrimary, "isAutoIncrement=", isAutoIncrement)
 	if column == "" {
 		return
 	}
@@ -96,6 +109,10 @@ func (g Generator) analyzeField(field reflect.StructField) (primary []columnInfo
 		values = append(values, colinfo)
 	}
 
+	if isAutoIncrement {
+		autoIncrementCol = colinfo.Column
+	}
+
 	return
 }
 
@@ -109,7 +126,7 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	// note: Now, tp is not pointer type but struct type
 
 	// Field analysis
-	primary, values := g.analyzeStruct(tp)
+	primary, values, autoIncrementCol := g.analyzeStruct(tp)
 
 	// if there's no primary, firstCol is primary
 	if len(primary) == 0 {
@@ -121,12 +138,13 @@ func (g Generator) analyzeType(tp reflect.Type, pkg, table string) (map[string]i
 	}
 
 	vars := map[string]interface{}{
-		"Package":    pkg,
-		"Table":      table,
-		"Typename":   tp.Name(),
-		"Primary":    primary,
-		"Values":     values,
-		"AllColumns": append(primary, values...),
+		"Package":       pkg,
+		"Table":         table,
+		"Typename":      tp.Name(),
+		"Primary":       primary,
+		"Values":        values,
+		"AutoIncrement": autoIncrementCol,
+		"AllColumns":    append(primary, values...),
 	}
 
 	return vars, nil
@@ -198,6 +216,10 @@ func (p *{{ .Typename }}) ValueColumns() []string {
 
 func (p *{{ .Typename }}) Values() []interface{} {
 	return []interface{}{ {{ range $i, $v := .Values }}p.{{ $v.Field }}, {{ end }} }
+}
+
+func (p *{{ .Typename }}) AutoIncrementColumn() string {
+	return "{{ .AutoIncrement }}"
 }
 
 func (p *{{ .Typename }}) Scan(r seacle.RowScanner) error {

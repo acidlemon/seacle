@@ -186,11 +186,29 @@ type Modifiable interface {
 	PrimaryValues() []interface{}
 	ValueColumns() []string
 	Values() []interface{}
+	AutoIncrementColumn() string
 }
 
 func Insert(ctx Context, e Executable, in Modifiable) (int64, error) {
-	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (?)`, in.Table(), strings.Join(in.ValueColumns(), ","))
-	args := in.Values()
+	columns := in.PrimaryKeys()
+	columns = append(columns, in.ValueColumns()...)
+	args := in.PrimaryValues()
+	args = append(args, in.Values()...)
+	if in.AutoIncrementColumn() != "" {
+		target := in.AutoIncrementColumn()
+		tmpColumns := make([]string, 0, len(columns))
+		tmpArgs := make([]interface{}, 0, len(args))
+		for i, v := range columns {
+			if v != target {
+				tmpColumns = append(tmpColumns, columns[i])
+				tmpArgs = append(tmpArgs, args[i])
+			}
+		}
+		columns = tmpColumns
+		args = tmpArgs
+	}
+
+	q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (?)`, in.Table(), strings.Join(columns, ","))
 	query, exargs := expandPlaceholder(q, args)
 
 	result, err := e.ExecContext(ctx, query, exargs...)
